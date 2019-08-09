@@ -24,9 +24,16 @@ def minimalDistance(a1, a2, b1, b2):
     amid = a1 + 0.5 * adir
     s    = b1 - amid
     A    = np.dot(bdir, bdir)
-    B_2  = np.dot(adir, bdir)
+    B_2  = np.dot(bdir,    s)
     lambda_beta = - B_2 / A
-    
+    bOpt = lambda_beta * bdir + b1
+    s = a1 - bOpt
+    A    = np.dot(adir, adir)
+    B_2  = np.dot(adir, s)
+    lambda_alpha = - B_2 / A
+    aOpt = lambda_alpha * adir + a1
+    Delta = bOpt - aOpt
+    return np.sqrt(np.dot(Delta, Delta))
 
 def isProlateBetaAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
     """Check if an axis from beta1 to beta2 is nearly perpendicular with a maximal 
@@ -44,12 +51,12 @@ def isProlateBetaAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
     if abs(alphaDotBet) > maxTors:
        print "Not rectangular."
        return False
-    else:
-       print "Rectangular; Test maximal distance :"       
-       # find nearest point to alpha mid on the potential beta axis by bisection
+
+    print "Rectangular; Test maximal distance :"       
+   # find nearest point to alpha mid on the potential beta axis by bisection
    # midAlpha = [a2 + 0.5 * dAlph for a2, dAlph in zip(alpha2, dirAlpha)]
-       minDist = minimalDistance(a1, a2, b1, b2)
-       print minDist
+    minDist = minimalDistance(a1, a2, b1, b2)
+    print minDist
     #midBeta  = [b2 + 0.5 * dBeta for b2, dBeta in zip(beta2, dirBeta)]
 
 def isInSlice(ori, ortho, delta, point): pass
@@ -157,7 +164,7 @@ centers = [[ 0.5 * (x1+x2) for x1, x2 in zip(a1.get_coord(), a2.get_coord()) ]
            for a1, a2 in zip(maxDistAtoms1, maxDistAtoms2) ]
 
 # test call
-print "TestProlate", isProlateBetaAxis( [0, 0, 0], [10,10,10], [0,10,10], [10.1, 0, 0], 4.0, 10.0 )
+print "TestProlate", isProlateBetaAxis( [0, 0, 0], [10,10,10], [0,10,10], [10.2, 0, 0], 4.0, 10.0 )
 
 
 if shapeMode == "Prolate" or shapeMode == "All":
