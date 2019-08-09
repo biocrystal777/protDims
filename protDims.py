@@ -14,11 +14,9 @@ def distance(point1, point2):
 
 def minimalDistance(a1, a2, b1, b2):
     """Get the distance between nearest points to each other 
-     on to axes a and b without necesary intersection """
-#    a1 = np.asarray(alpha1)
-#    a2 = np.asarray(alpha2)
-#    b1 = np.asarray(beta1)
-#    b2 = np.asarray(beta2)
+     on to axes a and b without necesary intersection 
+     under the assumption that the points are located\
+     between a1,a2 ; b1,b respectively """
     adir = a2 - a1
     bdir = b2 - b1
     amid = a1 + 0.5 * adir
@@ -37,9 +35,7 @@ def minimalDistance(a1, a2, b1, b2):
 
 def isProlateBetaAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
     """Check if an axis from beta1 to beta2 is nearly perpendicular with a maximal 
-    distance to an axis from alpha1 to alpha2 and if their distance is under maxDist"""        
-    #dirAlpha = [a1 - a2 for a1, a2 in zip(alpha1, alpha2)]
-    #dirBeta =  [b1 - b2 for b1, b2 in zip(beta1, beta2)]
+    distance to an axis from alpha1 to alpha2 and if their distance is under maxDist"""       
     a1 = np.asarray(alpha1)
     a2 = np.asarray(alpha2)
     b1 = np.asarray(beta1)
@@ -59,10 +55,12 @@ def isProlateBetaAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
     print minDist
     #midBeta  = [b2 + 0.5 * dBeta for b2, dBeta in zip(beta2, dirBeta)]
 
-def isInSlice(ori, ortho, delta, point): pass
-"""Check if a point[x,y,z] is within a cylinder slice with the orthogonal vector ori + lambda * ortho [] """
 
-## start main
+#############################
+##                         ##
+## start main script here  ##
+##                         ##
+#############################
 
 # parse arguments
 if len(sys.argv) != 3:# or sys.argv[1] == "-h" or sys.argv[1] == "--help":
@@ -164,7 +162,7 @@ centers = [[ 0.5 * (x1+x2) for x1, x2 in zip(a1.get_coord(), a2.get_coord()) ]
            for a1, a2 in zip(maxDistAtoms1, maxDistAtoms2) ]
 
 # test call
-print "TestProlate", isProlateBetaAxis( [0, 0, 0], [10,10,10], [0,10,10], [10.2, 0, 0], 4.0, 10.0 )
+print "TestProlate", isProlateBetaAxis( [0, 0, 0], [10,10,10], [1,1,1], [11, 11, 11], 4.0, 10.0 )
 
 
 if shapeMode == "Prolate" or shapeMode == "All":
