@@ -2,7 +2,7 @@
 import numpy as np
 import sys
 import re
-from scipy.optimize import minimize
+#from scipy.optimize import minimize
 from Bio.PDB import PDBParser
 from Bio.PDB.Atom import Atom
 
@@ -13,13 +13,20 @@ def distance(point1, point2):
     return sqrt( vx**2 + vy**2 + vz**2 )
 
 def minimalDistance(a1, a2, b1, b2):
+    """Get the distance between nearest points to each other 
+     on to axes a and b without necesary intersection """
 #    a1 = np.asarray(alpha1)
 #    a2 = np.asarray(alpha2)
 #    b1 = np.asarray(beta1)
 #    b2 = np.asarray(beta2)
     adir = a2 - a1
     bdir = b2 - b1
-    amid = a1 + 0.5 * adir    
+    amid = a1 + 0.5 * adir
+    s    = b1 - amid
+    A    = np.dot(bdir, bdir)
+    B_2  = np.dot(adir, bdir)
+    lambda_beta = - B_2 / A
+    
 
 def isProlateBetaAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
     """Check if an axis from beta1 to beta2 is nearly perpendicular with a maximal 
@@ -41,7 +48,8 @@ def isProlateBetaAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
        print "Rectangular; Test maximal distance :"       
        # find nearest point to alpha mid on the potential beta axis by bisection
    # midAlpha = [a2 + 0.5 * dAlph for a2, dAlph in zip(alpha2, dirAlpha)]
-    minDist = minimalDistance(a1, a2, b1, b2)
+       minDist = minimalDistance(a1, a2, b1, b2)
+       print minDist
     #midBeta  = [b2 + 0.5 * dBeta for b2, dBeta in zip(beta2, dirBeta)]
 
 def isInSlice(ori, ortho, delta, point): pass
