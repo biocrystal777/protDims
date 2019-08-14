@@ -72,7 +72,8 @@ def ellipsAlignMatrix(a1, a2):
                       ])  
     return RotY * RotZ
 
-def pointToEllipsAlignment(point, tranlation, rotation): pass
+def pointToEllipsAlignment(point, translation, rotation):
+    return rotation * (point - translation)
 
 def isWithinProlate(a1, a2, betaLength, normedSampl): pass
 #########################################################
