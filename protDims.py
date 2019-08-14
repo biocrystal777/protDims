@@ -55,18 +55,32 @@ def isSecondOblateAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
     else:
         print b1, "<->",  b2, "is too far (", axisDist ,") from", a1, "<->", a2, ", maximal allowed distance =", maxDist
         return False
-    
-def isWithinProlate(a1, a2, betaLength, samplePoint):    
+
+def ellipsAlignMatrix(a1, a2):
+    adir = a2 - a1
+    amid = a1 + 0.5 * adir
+    kath = np.sqrt((adir[0] * adir[0]  + adir[1] * adir[1]) / 4.0)
+    theta = -np.arctan( k1 / ( adir[2]/2)  )
+    RotY = np.matrix( [ [  np.cos(theta), 0.0, np.sin(theta) ],
+                        [     0.0       , 1.0,     0.0       ],
+                        [ -np.sin(theta), 0.0, np.cos(theta) ]
+                      ]) 
+    psi   = -np.arctan( adir[1] / adir[0]  )
+    RotZ = np.matrix( [ [  np.cos(psi), -np.sin(psi), 0.0 ],
+                        [  np.sin(psi),  np.cos(psi), 0.0 ],
+                        [      0.0    ,       0.0   , 1.0 ]
+                      ])  
+    return RotY * RotZ
+
+def pointToEllipsAlignment(point, tranlation, rotation): pass
+
+def isWithinProlate(a1, a2, betaLength, normedSampl): pass
 #########################################################
 # transform coordinate system for sample in such way
 # that the center a1<->a2 is on (0,0,0)
 # and the a1<->a2 is aligned with x axis
 #########################################################
-    aDir = a2 - a1
-    aMid = a1 + 0.5 * aDir
-    # Translation
-    a1Translat     = a1 - aMid
-    sampleTranslat = samplePoint - aMid
+
     
 
 #############################
