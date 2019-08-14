@@ -2,15 +2,8 @@
 import numpy as np
 import sys
 import re
-#from scipy.optimize import minimize
 from Bio.PDB import PDBParser
 from Bio.PDB.Atom import Atom
-
-def distance(point1, point2):
-    vx = point2[0] - point1[0]
-    vy = point2[1] - point1[1]
-    vz = point2[2] - point1[2]
-    return sqrt( vx**2 + vy**2 + vz**2 )
 
 def minimalDistance(a1, a2, b1, b2):
     """Get the distance between nearest points to each other 
@@ -33,7 +26,7 @@ def minimalDistance(a1, a2, b1, b2):
     Delta = bOpt - aOpt
     return np.sqrt(np.dot(Delta, Delta))
 
-def isProlateBetaAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
+def isSecondOblateAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
     """Check if an axis from beta1 to beta2 is nearly perpendicular with a maximal 
     distance to an axis from alpha1 to alpha2 and if their distance is under maxDist"""       
     a1 = np.asarray(alpha1)
@@ -41,20 +34,40 @@ def isProlateBetaAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
     b1 = np.asarray(beta1)
     b2 = np.asarray(beta2)
     #lent = alpha1 - beta1
-    #alphaDotBet = dirAlpha[0] * dirBeta[0] + dirAlpha[1] * dirBeta[1] + dirAlpha[2] * dirBeta[2]
-    alphaDotBet = 0.01
-    maxTors = np.cos(maxTorsAngle * 3.14 / 180.0)
-    if abs(alphaDotBet) > maxTors:
-       print "Not rectangular."
+    adir = a2 - a1
+    bdir = b2 - b1
+    aLength = np.sqrt ( np.dot(adir, adir) )
+    bLength = np.sqrt ( np.dot(bdir, bdir) )
+    DotProdNormed = np.dot(adir, bdir) / ( aLength * bLength )   
+    maxTors = np.cos( np.radians( maxTorsAngle ))
+    if abs(DotProdNormed) > maxTors:
+       print beta1, beta2, "not rectangular, angle = ", np.arccos(DotProdNormed)
        return False
-
-    print "Rectangular; Test maximal distance :"       
-   # find nearest point to alpha mid on the potential beta axis by bisection
-   # midAlpha = [a2 + 0.5 * dAlph for a2, dAlph in zip(alpha2, dirAlpha)]
-    minDist = minimalDistance(a1, a2, b1, b2)
-    print minDist
+    print beta1, beta2, "is rectangular."       
+    # find nearest point to alpha mid on the potential beta axis by bisection
+    # midAlpha = [a2 + 0.5 * dAlph for a2, dAlph in zip(alpha2, dirAlpha)]
+    axisDist = minimalDistance(a1, a2, b1, b2)
+    print "Distance of", a1, "<->", a2, "  to  ",  b1, "<->",  b2, "is", axisDist
     #midBeta  = [b2 + 0.5 * dBeta for b2, dBeta in zip(beta2, dirBeta)]
-
+    if (axisDist < maxDist):
+        print b1, "<->",  b2, "is possible axis"
+        return True
+    else:
+        print b1, "<->",  b2, "is too far (", axisDist ,") from", a1, "<->", a2, ", maximal allowed distance =", maxDist
+        return False
+    
+def isWithinProlate(a1, a2, betaLength, samplePoint):    
+#########################################################
+# transform coordinate system for sample in such way
+# that the center a1<->a2 is on (0,0,0)
+# and the a1<->a2 is aligned with x axis
+#########################################################
+    aDir = a2 - a1
+    aMid = a1 + 0.5 * aDir
+    # Translation
+    a1Translat     = a1 - aMid
+    sampleTranslat = samplePoint - aMid
+    
 
 #############################
 ##                         ##
@@ -62,7 +75,10 @@ def isProlateBetaAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
 ##                         ##
 #############################
 
-# parse arguments
+#####################
+# parse arguments from command line
+#####################
+
 if len(sys.argv) != 3:# or sys.argv[1] == "-h" or sys.argv[1] == "--help":
     print "Usage of protDims:"
     print ">>> $~ ./protDims.py <myStructure.pdb> <shapeModel>"
@@ -91,52 +107,52 @@ elif sys.argv[2] == "--all":
 else:
     "Please specify a valid shape model (--prolate, --oblate or --all)."
 
+####################
+### Parse *.pdb file
+####################
+
 aAcids = ["ALA", "ARG", "CYS", "GLU", "PHE",
           "GLY", "HIS", "ILE", "LYS", "LEU",
           "MET", "ASN", "PRO", "GLN", "ARG",
           "SER", "THR", "VAL", "TRP", "TYR",
           "PYL", "SEC"]
 
-# reduced for testing:
-
-aAcids = ["ALA", "ARG", "CYS", "GLY", "LEU", "Gln", "TYR", "VAL"]
+# reduced set for testing speed-up
+#aAcids = ["ALA", "ARG", "CYS", "GLY", "LEU", "Gln", "TYR", "VAL"]
 
 parser = PDBParser(PERMISSIVE=1)
-#builder = StructureBuilder()
 print "Parse ", pdbFile, "..."
 structure = parser.get_structure("1ova", "1ova.pdb")
 model = structure[0]
-atoms1 = list(model.get_atoms())
-## filter water molecules
-print len(atoms1)
-atoms1  = list(filter(lambda a: a.get_parent().get_resname() in aAcids, atoms1))
-print len(atoms1)
-#C alpha test:
-atoms1 = list(filter(lambda a: a.get_name() == "CA", atoms1))
-print len(atoms1)
+atomsAll = list(model.get_atoms())
+
+# remove water molecules
+atomsAll  = list(filter(lambda a: a.get_parent().get_resname() in aAcids, atomsAll))
+
+# Reduce list and keep C-alphas only
+atoms1 = list(filter(lambda a: a.get_name() == "CA", atomsAll))
+
+###############################################
+### Find longest connecting axes
+### maxDistAtoms1<->maxDistAtoms2
+### within the list of atoms
+###############################################
 atoms2 = atoms1
-#from Bio.PDB import Atom
 defaultAtom = Atom("N", [0.0, 0.0, 0.0], 1.0, 0.0, "d", "d", "d" )
 axesNum = 5
 maxDistAtoms1 = [defaultAtom] * axesNum
 maxDistAtoms2 = [defaultAtom] * axesNum
-maxDists =      [0.0]         * axesNum
-
-# for i in range(axesNum) :
-# maxDistAtomPairs.append(defaultAtom, defaultAtom, 0.0)
-#maxDists = [0.0] * axesNum
-# find longest alpha axes
-
+maxDists      = [0.0]         * axesNum
 minDistOnList = 0.0
 minIndex      = 0
-atomCounter   = 0.0 
+progressCounter = 0.0
 print "Find longest axes by raw brute force. This will take some time."
 for a1 in atoms1 :
     atoms2 = atoms2[1:]  #remove a1-equivalent from a2 => check only i > j    
     #    print "Test distances with |", a1.get_parent().get_resname(),  "|", a1.get_name(), "|", a1.get_coord()
-    atomCounter += 1.0
-    if (atomCounter % 100 == 0) :
-        print ("%.2f"% ( atomCounter / len(atoms1) * 100 ) ), "% done..."
+    progressCounter += 1
+    if (progressCounter % 100 == 0):
+        print ("%.2f"% ( progressCounter / len(atoms1) * 100 ) ), "% done..."
     for a2 in atoms2 :
        dist = a2 - a1
        if dist > minDistOnList :
@@ -145,7 +161,7 @@ for a1 in atoms1 :
           maxDists[minIndex]      = dist
           minIndex                = maxDists.index(min(maxDists))
           minDistOnList = maxDists[minIndex]
-print "\n\n\n Longest distances at:"
+print "\n\n\n Longest distances at: \n"
 for i in range(axesNum):
     a1 = maxDistAtoms1[i]
     a2 = maxDistAtoms2[i]
@@ -155,27 +171,28 @@ for i in range(axesNum):
     print a2.get_parent().get_resname(), " | ", a2.get_name(), " |", a2.get_coord()
     print "Distance:"
     print maxDists[i]
-# get axis centers
-
-# centers for each axis i => i X [x,y,z] 
-centers = [[ 0.5 * (x1+x2) for x1, x2 in zip(a1.get_coord(), a2.get_coord()) ]
-           for a1, a2 in zip(maxDistAtoms1, maxDistAtoms2) ]
-
-# test call
-print "TestProlate", isProlateBetaAxis( [0, 0, 0], [10,10,10], [1,1,1], [11, 11, 11], 4.0, 10.0 )
-
 
 if shapeMode == "Prolate" or shapeMode == "All":
+#############################
+# Atom counting on 
+#############################
+    for i in range(axesNum):
+        adir = maxDistAtoms2[i] - maxDistAtoms1[i]
+        
+        
 #    maxDistAtoms1[0]
 #    maxDistAtoms2[0]
-    atoms2 = atoms1
-
-    print "Find orthogonal axes"   
-    for a1 in atoms1:
-        if (atomCounter % 100 == 0) :
-            print ("%.2f"% ( atomCounter / len(atoms1) * 100 ) ), "% done..."
-    atoms2 = atoms2[1:] #remove a1-equivalent from a2 => check only i > j    
+#    atoms2 = atoms1
+#
+#    print "Find orthogonal axes"   
+#    for a1 in atoms1:
+#        if (progressCounter % 100 == 0) :
+#            print ("%.2f"% ( progressCounter / len(atoms1) * 100 ) ), "% done..."
+#    atoms2 = atoms2[1:] #remove a1-equivalent from a2 => check only i > j    
     #     
-if shapeMode == "Oblate"  or shapeMode == "All": pass
-    # define "search cylinder" around beta-axis
-#define 
+if shapeMode == "Oblate"  or shapeMode == "All":
+    
+# test call for recognition of orthogonal beta axis
+    print "-------------------------------------"
+    print "\nTest Axis recognition:", isSecondOblateAxis( [0.0, 0.0, 0.0], [10.0,10.0,10.0], [0.0, 0.0, 10.1], [10, 10, 0], 4.0, 10.0 ), "\n"
+    print "-------------------------------------"
