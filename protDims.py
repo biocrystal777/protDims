@@ -72,18 +72,27 @@ def ellipsAlignMatrix(a1, a2):
                       ])  
     return RotY * RotZ
 
-def pointToEllipsAlignment(point, translation, rotation):
-    return rotation * (point - translation)
+#def pointToEllipsAlignment(point, translation, rotation):
+#    return rotation * (point - translation)
 
-def isWithinProlate(a1, a2, betaLength, normedSampl): pass
-#########################################################
-# transform coordinate system for sample in such way
-# that the center a1<->a2 is on (0,0,0)
-# and the a1<->a2 is aligned with x axis
-#########################################################
 
+
+def isInProlate(sample, alpha, beta, translation, rotation):
+    """ checks if a sample point (sx,sy,sz) is inside the prolate shape
+        with semi=axes alpha > beta. The translation vector and rotation matrix
+        have to describe the transformation for aligning the alpha-axis with
+        the x of the coordinate system and in setting the center to the origin.
+        The fundamental ellipsoidal equation is applied the transformed sample
+        point """   
+    sRot = rotation * (sample - translation)
+    E    = sRot[0] * sRot[0] / (alpha * alpha)
+    E   += (sRot[1] * sRot[1] + sRot[2] * sRot[2] ) / (beta * beta)
+    if E > 1.0:
+        return False
+    else:
+        return True
     
-
+    
 #############################
 ##                         ##
 ## start main script here  ##
@@ -142,7 +151,7 @@ model = structure[0]
 atomsAll = list(model.get_atoms())
 
 # remove water molecules
-atomsAll  = list(filter(lambda a: a.get_parent().get_resname() in aAcids, atomsAll))
+atomsAll = list(filter(lambda a: a.get_parent().get_resname() in aAcids, atomsAll))
 
 # Reduce list and keep C-alphas only
 atoms1 = list(filter(lambda a: a.get_name() == "CA", atomsAll))
@@ -192,8 +201,15 @@ if shapeMode == "Prolate" or shapeMode == "All":
 # Atom counting on 
 #############################
     for i in range(axesNum):
-        adir = maxDistAtoms2[i] - maxDistAtoms1[i]
-        
+        checkAtoms = [ np.vector(a.get_coord()) for a in atomsAll]
+        distanceAlpha = maxDistAtoms2[i] - maxDistAtoms1[i]
+        a1 = np.vector(maxDistAtoms1[i].get_coord())
+        a2 = np.vector(maxDistAtoms2[i].get_coord())
+        rotMat = ellipsAlignMatrix(a1, a2)
+        for beta in np.arange(0.1, distanceAlpha - 0.1 , 0.1): pass
+
+
+
         
 #    maxDistAtoms1[0]
 #    maxDistAtoms2[0]
