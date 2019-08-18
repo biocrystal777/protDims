@@ -60,7 +60,7 @@ def ellipsAlignMatrix(a1, a2):
     adir = a2 - a1
     amid = a1 + 0.5 * adir
     kath = np.sqrt((adir[0] * adir[0]  + adir[1] * adir[1]) / 4.0)
-    theta = -np.arctan( k1 / ( adir[2]/2)  )
+    theta = -np.arctan( kath / ( adir[2]/2)  )
     RotY = np.matrix( [ [  np.cos(theta), 0.0, np.sin(theta) ],
                         [     0.0       , 1.0,     0.0       ],
                         [ -np.sin(theta), 0.0, np.cos(theta) ]
@@ -70,7 +70,7 @@ def ellipsAlignMatrix(a1, a2):
                         [  np.sin(psi),  np.cos(psi), 0.0 ],
                         [      0.0    ,       0.0   , 1.0 ]
                       ])  
-    return RotY * RotZ
+    return np.asarray(RotY * RotZ)
 
 #def pointToEllipsAlignment(point, translation, rotation):
 #    return rotation * (point - translation)
@@ -84,7 +84,8 @@ def isInProlate(sample, alpha, beta, translation, rotation):
         the x of the coordinate system and in setting the center to the origin.
         The fundamental ellipsoidal equation is applied the transformed sample
         point """   
-    sRot = rotation * (sample - translation)
+    sRot = np.matmul(rotation , (sample - translation))
+#    print sRot
     E    = sRot[0] * sRot[0] / (alpha * alpha)
     E   += (sRot[1] * sRot[1] + sRot[2] * sRot[2] ) / (beta * beta)
     if E > 1.0:
@@ -131,9 +132,9 @@ elif sys.argv[2] == "--all":
 else:
     "Please specify a valid shape model (--prolate, --oblate or --all)."
 
-####################
+#########################
 ### Parse *.pdb file
-####################
+#########################
 
 aAcids = ["ALA", "ARG", "CYS", "GLU", "PHE",
           "GLY", "HIS", "ILE", "LYS", "LEU",
@@ -146,7 +147,8 @@ aAcids = ["ALA", "ARG", "CYS", "GLU", "PHE",
 
 parser = PDBParser(PERMISSIVE=1)
 print "Parse ", pdbFile, "..."
-structure = parser.get_structure("1ova", "1ova.pdb")
+#structure = parser.get_structure("1ova", "1ova.pdb")
+structure = parser.get_structure(pdbFile[:-4], pdbFile)
 model = structure[0]
 atomsAll = list(model.get_atoms())
 
@@ -156,19 +158,25 @@ atomsAll = list(filter(lambda a: a.get_parent().get_resname() in aAcids, atomsAl
 # Reduce list and keep C-alphas only
 atoms1 = list(filter(lambda a: a.get_name() == "CA", atomsAll))
 
+# print List of search atom
+print "\n Start List of atoms:\n"
+for i in atoms1:
+    print i.get_full_id(), i.get_coord()
+print "\n End List of atoms:\n"
+    
 ###############################################
 ### Find longest connecting axes
 ### maxDistAtoms1<->maxDistAtoms2
 ### within the list of atoms
 ###############################################
-atoms2 = atoms1
-defaultAtom = Atom("N", [0.0, 0.0, 0.0], 1.0, 0.0, "d", "d", "d" )
-axesNum = 5
+atoms2        = atoms1
+defaultAtom   = Atom("N", [0.0, 0.0, 0.0], 1.0, 0.0, "d", "d", "d" )
+axesNum       = 5
 maxDistAtoms1 = [defaultAtom] * axesNum
 maxDistAtoms2 = [defaultAtom] * axesNum
-maxDists      = [0.0]         * axesNum
-minDistOnList = 0.0
-minIndex      = 0
+maxDists        = [0.0]         * axesNum
+minDistOnList   = 0.0
+minIndex        = 0
 progressCounter = 0.0
 print "Find longest axes by raw brute force. This will take some time."
 for a1 in atoms1 :
@@ -185,31 +193,46 @@ for a1 in atoms1 :
           maxDists[minIndex]      = dist
           minIndex                = maxDists.index(min(maxDists))
           minDistOnList = maxDists[minIndex]
+##########################
+# Print search results
+##########################
 print "\n\n\n Longest distances at: \n"
 for i in range(axesNum):
     a1 = maxDistAtoms1[i]
     a2 = maxDistAtoms2[i]
     print "From:" 
-    print a1.get_parent().get_resname(), " | ", a1.get_name(), " |", a1.get_coord()
+#    print  a1.get_parent().get_resname(), " | ", a1.get_name(), " |", a1.get_coord()
+    print  a1.get_parent().__repr__(), " | ", a1.get_name(), " |", a1.get_coord()
     print "To:"
-    print a2.get_parent().get_resname(), " | ", a2.get_name(), " |", a2.get_coord()
+    print  a2.get_parent().__repr__(), " | ", a2.get_name(), " |", a2.get_coord()
     print "Distance:"
-    print maxDists[i]
-
+    print maxDists[i], "\n"
+    
+#################################
+###
+###  Prolate Mode
+###
+#############################
+targetFile = open("testOutProlate.csv","w")
 if shapeMode == "Prolate" or shapeMode == "All":
-#############################
-# Atom counting on 
-#############################
+# Atom counting of prolates outside
     for i in range(axesNum):
-        checkAtoms = [ np.vector(a.get_coord()) for a in atomsAll]
-        distanceAlpha = maxDistAtoms2[i] - maxDistAtoms1[i]
-        a1 = np.vector(maxDistAtoms1[i].get_coord())
-        a2 = np.vector(maxDistAtoms2[i].get_coord())
+        checkAtoms = [ np.asarray(a.get_coord()) for a in atoms1]
+        maxAtoms = len(checkAtoms)
+        distance = maxDistAtoms2[i] - maxDistAtoms1[i]        
+        a1 = np.asarray(maxDistAtoms1[i].get_coord())
+        a2 = np.asarray(maxDistAtoms2[i].get_coord())
+        adir = a2 - a1
         rotMat = ellipsAlignMatrix(a1, a2)
-        for beta in np.arange(0.1, distanceAlpha - 0.1 , 0.1): pass
-
-
-
+        print "------ alpha axis: ", a1, "<->", a2
+        ## throw away all atoms which are in growing prolate and print remaining rests
+        for beta in np.arange(0.5, distance/2, 0.5):
+            checkAtoms = filter(lambda s: not isInProlate(s, distance / 2, beta, adir/2, rotMat), checkAtoms) 
+            print beta, len(checkAtoms)
+            if(i==0):
+                targetFile.write(str(beta) + "," +  str(len(checkAtoms)) + "\n")
+targetFile.close()                
+            
         
 #    maxDistAtoms1[0]
 #    maxDistAtoms2[0]
@@ -221,8 +244,7 @@ if shapeMode == "Prolate" or shapeMode == "All":
 #            print ("%.2f"% ( progressCounter / len(atoms1) * 100 ) ), "% done..."
 #    atoms2 = atoms2[1:] #remove a1-equivalent from a2 => check only i > j    
     #     
-if shapeMode == "Oblate"  or shapeMode == "All":
-    
+if shapeMode == "Oblate" or shapeMode == "All":    
 # test call for recognition of orthogonal beta axis
     print "-------------------------------------"
     print "\nTest Axis recognition:", isSecondOblateAxis( [0.0, 0.0, 0.0], [10.0,10.0,10.0], [0.0, 0.0, 10.1], [10, 10, 0], 4.0, 10.0 ), "\n"
