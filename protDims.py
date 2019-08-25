@@ -57,37 +57,38 @@ def isSecondOblateAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
         return False
 
 def ellipsAlignMatrix(a1, a2):
+    ''' Creates the rotation matrix to rotate axis a1<->a2 on the x-Axis'''
     adir = a2 - a1
     amid = a1 + 0.5 * adir
     kath = np.sqrt((adir[0] * adir[0]  + adir[1] * adir[1]) / 4.0)
-    theta = -np.arctan( kath / ( adir[2]/2)  )
+    theta = np.arctan(  (adir[2]/2) /  kath )
+    print "theta =" , np.rad2deg(theta)
     RotY = np.matrix( [ [  np.cos(theta), 0.0, np.sin(theta) ],
                         [     0.0       , 1.0,     0.0       ],
                         [ -np.sin(theta), 0.0, np.cos(theta) ]
                       ]) 
     psi   = -np.arctan( adir[1] / adir[0]  )
+    print "psi =" , np.rad2deg(psi)
     RotZ = np.matrix( [ [  np.cos(psi), -np.sin(psi), 0.0 ],
                         [  np.sin(psi),  np.cos(psi), 0.0 ],
                         [      0.0    ,       0.0   , 1.0 ]
-                      ])  
-    return np.asarray(RotY * RotZ)
+                      ])
+    return np.asarray( RotY * RotZ )
 
 #def pointToEllipsAlignment(point, translation, rotation):
 #    return rotation * (point - translation)
 
-
-
-def isInProlate(sample, alpha, beta, translation, rotation):
+def isInProlate(sample, alpha, beta):
     """ checks if a sample point (sx,sy,sz) is inside the prolate shape
         with semi=axes alpha > beta. The translation vector and rotation matrix
         have to describe the transformation for aligning the alpha-axis with
         the x of the coordinate system and in setting the center to the origin.
         The fundamental ellipsoidal equation is applied the transformed sample
         point """   
-    sRot = np.matmul(rotation , (sample - translation))
+#    sRot = np.matmul(rotation , (sample - translation))
 #    print sRot
-    E    = sRot[0] * sRot[0] / (alpha * alpha)
-    E   += (sRot[1] * sRot[1] + sRot[2] * sRot[2] ) / (beta * beta)
+    E    = sample[0] * sample[0] / (alpha * alpha)
+    E   += (sample[1] * sample[1] + sample[2] * sample[2] ) / (beta * beta)
     if E > 1.0:
         return False
     else:
@@ -157,6 +158,7 @@ atomsAll = list(filter(lambda a: a.get_parent().get_resname() in aAcids, atomsAl
 
 # Reduce list and keep C-alphas only
 atoms1 = list(filter(lambda a: a.get_name() == "CA", atomsAll))
+#atoms1 = atomsAll
 
 # print List of search atom
 print "\n Start List of atoms:\n"
@@ -208,7 +210,7 @@ for i in range(axesNum):
     print "Distance:"
     print maxDists[i], "\n"
     
-#################################
+#############################
 ###
 ###  Prolate Mode
 ###
@@ -217,22 +219,36 @@ targetFile = open("testOutProlate.csv","w")
 if shapeMode == "Prolate" or shapeMode == "All":
 # Atom counting of prolates outside
     for i in range(axesNum):
+        # take all atoms from the protein
         checkAtoms = [ np.asarray(a.get_coord()) for a in atoms1]
         maxAtoms = len(checkAtoms)
-        distance = maxDistAtoms2[i] - maxDistAtoms1[i]        
+        # take alpha axis      
         a1 = np.asarray(maxDistAtoms1[i].get_coord())
         a2 = np.asarray(maxDistAtoms2[i].get_coord())
+        print a1, a2, a1 + 0.5 * (a2-a1)
+        # shift all atoms from center of a1 <-> a2 axis to origin
         adir = a2 - a1
-        rotMat = ellipsAlignMatrix(a1, a2)
-        print "------ alpha axis: ", a1, "<->", a2
-        ## throw away all atoms which are in growing prolate and print remaining rests
-        for beta in np.arange(0.5, distance/2, 0.5):
-            checkAtoms = filter(lambda s: not isInProlate(s, distance / 2, beta, adir/2, rotMat), checkAtoms) 
-            print beta, len(checkAtoms)
-            if(i==0):
-                targetFile.write(str(beta) + "," +  str(len(checkAtoms)) + "\n")
-targetFile.close()                
-            
+        alphaCenter = a1 + 0.5 * adir
+        shift = -alphaCenter
+        atomsShift = [ a + shift for a in checkAtoms ]
+        a1Shift = a1 + shift
+        a2Shift = a2 + shift
+        print a1Shift, a2Shift, a1Shift + 0.5 * (a2Shift-a1Shift)
+        # rotate all Shift atoms around origin = new alpha center
+        rotMat = ellipsAlignMatrix(a1Shift, a2Shift)        
+        atomsRot = [ np.matmul(a, rotMat) for a in atomsShift ]
+        a1Rot  = np.matmul(rotMat, a1Shift) 
+        a2Rot  = np.matmul(rotMat, a2Shift)
+        print a1Rot, a2Rot, "\n"
+        alpha = abs(a1Rot[0])
+        stride = 0.5
+        for beta in np.arange(0.5, alpha, stride):
+            atomsRot = filter(lambda sample: not isInProlate(sample, alpha, beta), atomsRot)
+#            print beta, len(atomsRot)
+#            if(i == 0 ):
+#                targetFile.write(str(beta) + "," +  str(len(atomsRot)) + "\n")
+   
+targetFile.close()                            
         
 #    maxDistAtoms1[0]
 #    maxDistAtoms2[0]
