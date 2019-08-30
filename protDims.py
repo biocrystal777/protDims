@@ -1,9 +1,17 @@
 #!/usr/bin/python2
+# using numpy 1.12
 import numpy as np
 import sys
 import re
 from Bio.PDB import PDBParser
 from Bio.PDB.Atom import Atom
+
+# minimalDistance(a1, a2, b1, b2)                   -> minimal distance (float)
+# octant(p)                                         -> octant           (float)
+# isSecondOblateAxis(alpha1, alpha2, beta1, beta2)  -> axis check       (bool)
+# ellipsAlignMatrix(a1, a2)                         -> rotation matrix  (3x3 np.matrix)
+# isInProlate                                       -> position check   (bool)
+# isInOblate                                        -> position check   (bool)
 
 def minimalDistance(a1, a2, b1, b2):
     """Get the distance between nearest points to each other 
@@ -25,6 +33,34 @@ def minimalDistance(a1, a2, b1, b2):
     aOpt = lambda_alpha * adir + a1
     Delta = bOpt - aOpt
     return np.sqrt(np.dot(Delta, Delta))
+
+def octant(p):
+    """ find the octant of the point p"""
+    x = p[0]
+    y = p[1]
+    z = p[2]
+    if z > 0:
+        if y > 0:
+            if x > 0:
+                return 1
+            else:
+                return 2
+        else:
+            if x > 0:
+                return 4
+            else:
+                return 3
+    else:
+        if y > 0:
+            if x > 0:
+                return 5
+            else:
+                return 6
+        else:
+            if x > 0:
+                return 8
+            else:
+                return 7
 
 def isSecondOblateAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
     """Check if an axis from beta1 to beta2 is nearly perpendicular with a maximal 
@@ -49,7 +85,7 @@ def isSecondOblateAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
     axisDist = minimalDistance(a1, a2, b1, b2)
     print "Distance of", a1, "<->", a2, "  to  ",  b1, "<->",  b2, "is", axisDist
     #midBeta  = [b2 + 0.5 * dBeta for b2, dBeta in zip(beta2, dirBeta)]
-    if (axisDist < maxDist):
+    if axisDist < maxDist:
         print b1, "<->",  b2, "is possible axis"
         return True
     else:
@@ -61,13 +97,23 @@ def ellipsAlignMatrix(a1, a2):
     adir = a2 - a1
     amid = a1 + 0.5 * adir
     kath = np.sqrt((adir[0] * adir[0]  + adir[1] * adir[1]) / 4.0)
-    theta = np.arctan(  (adir[2]/2) /  kath )
+    octantA2 = octant(a2)
+    theta = np.arctan( abs( (adir[2]/2) /  kath) )
+    #[1, 4, 6, 7 ] => left rotation
+    #[2, 3, 5, 8 ] => right rotation
+    if octantA2 in [2, 3, 5, 8]: 
+        theta = -theta        
     print "theta =" , np.rad2deg(theta)
     RotY = np.matrix( [ [  np.cos(theta), 0.0, np.sin(theta) ],
                         [     0.0       , 1.0,     0.0       ],
                         [ -np.sin(theta), 0.0, np.cos(theta) ]
                       ]) 
-    psi   = -np.arctan( adir[1] / adir[0]  )
+    
+    psi   = np.arctan( abs( adir[1] / adir[0] ) )
+    #[2, 4, 6, 8 ] => left rotation
+    #[1, 3, 5, 7 ] => right rotation
+    if octantA2 in [1, 3, 5, 7]:
+        psi = -psi
     print "psi =" , np.rad2deg(psi)
     RotZ = np.matrix( [ [  np.cos(psi), -np.sin(psi), 0.0 ],
                         [  np.sin(psi),  np.cos(psi), 0.0 ],
@@ -92,8 +138,7 @@ def isInProlate(sample, alpha, beta):
     if E > 1.0:
         return False
     else:
-        return True
-    
+        return True    
     
 #############################
 ##                         ##
@@ -101,9 +146,16 @@ def isInProlate(sample, alpha, beta):
 ##                         ##
 #############################
 
-#####################
+###################
+## settings
+###################
+
+np.set_printoptions(precision = 2)
+#np.set_printoptions(floatmode = 'fixed') # only available for numpy version>= 1.14
+
+######################################
 # parse arguments from command line
-#####################
+######################################
 
 if len(sys.argv) != 3:# or sys.argv[1] == "-h" or sys.argv[1] == "--help":
     print "Usage of protDims:"
@@ -195,6 +247,7 @@ for a1 in atoms1 :
           maxDists[minIndex]      = dist
           minIndex                = maxDists.index(min(maxDists))
           minDistOnList = maxDists[minIndex]
+          
 ##########################
 # Print search results
 ##########################
@@ -217,15 +270,23 @@ for i in range(axesNum):
 #############################
 targetFile = open("testOutProlate.csv","w")
 if shapeMode == "Prolate" or shapeMode == "All":
+    print "-----------------------------------"
+    print "- Start counting the atoms for     "
+    print "- variable beta in prolate         "
+    print "-----------------------------------\n"
+
 # Atom counting of prolates outside
     for i in range(axesNum):
+        print "+++++++++++++++++++++++++++++++++++++++++"
+        print "+++ Check axis a1 <--> a2 \'", i, "\' +++"
+        print "+++++++++++++++++++++++++++++++++++++++++\n"
         # take all atoms from the protein
         checkAtoms = [ np.asarray(a.get_coord()) for a in atoms1]
         maxAtoms = len(checkAtoms)
         # take alpha axis      
         a1 = np.asarray(maxDistAtoms1[i].get_coord())
         a2 = np.asarray(maxDistAtoms2[i].get_coord())
-        print a1, a2, a1 + 0.5 * (a2-a1)
+        print "a1:", a1, "\na2:", a2, "\namid:", a1 + 0.5 * (a2-a1)
         # shift all atoms from center of a1 <-> a2 axis to origin
         adir = a2 - a1
         alphaCenter = a1 + 0.5 * adir
@@ -233,21 +294,22 @@ if shapeMode == "Prolate" or shapeMode == "All":
         atomsShift = [ a + shift for a in checkAtoms ]
         a1Shift = a1 + shift
         a2Shift = a2 + shift
-        print a1Shift, a2Shift, a1Shift + 0.5 * (a2Shift-a1Shift)
+        print "--> Shift amid to origin (and all atoms accordingly) -->"
+        print "a1:", a1Shift, "\na2:", a2Shift, "\namid:", a1Shift + 0.5 * (a2Shift-a1Shift)
         # rotate all Shift atoms around origin = new alpha center
         rotMat = ellipsAlignMatrix(a1Shift, a2Shift)        
         atomsRot = [ np.matmul(a, rotMat) for a in atomsShift ]
         a1Rot  = np.matmul(rotMat, a1Shift) 
         a2Rot  = np.matmul(rotMat, a2Shift)
-        print a1Rot, a2Rot, "\n"
+        print "@-> Rotate alpha to x-axis @->"
+        print "a1:", a1Rot,"\na2:", a2Rot, "\n"
         alpha = abs(a1Rot[0])
         stride = 0.5
         for beta in np.arange(0.5, alpha, stride):
             atomsRot = filter(lambda sample: not isInProlate(sample, alpha, beta), atomsRot)
 #            print beta, len(atomsRot)
-#            if(i == 0 ):
-#                targetFile.write(str(beta) + "," +  str(len(atomsRot)) + "\n")
-   
+            if(i == 0 ):
+                targetFile.write(str(beta) + "," +  str(len(atomsRot)) + "\n")
 targetFile.close()                            
         
 #    maxDistAtoms1[0]
