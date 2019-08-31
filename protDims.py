@@ -76,24 +76,24 @@ def isSecondOblateAxis(alpha1, alpha2, beta1, beta2, maxDist, maxTorsAngle):
     bLength = np.sqrt ( np.dot(bdir, bdir) )
     DotProdNormed = np.dot(adir, bdir) / ( aLength * bLength )   
     maxTors = np.cos( np.radians( maxTorsAngle ))
-    if abs(DotProdNormed) > maxTors:
-       print beta1, beta2, "not rectangular, angle = ", np.arccos(DotProdNormed)
-       return False
-    print beta1, beta2, "is rectangular."       
+    if (abs(DotProdNormed) > maxTors):
+   #    print beta1, beta2, "not rectangular, angle = ", np.arccos(DotProdNormed)
+        return False
+   # print beta1, beta2, "is rectangular."       
     # find nearest point to alpha mid on the potential beta axis by bisection
     # midAlpha = [a2 + 0.5 * dAlph for a2, dAlph in zip(alpha2, dirAlpha)]
     axisDist = minimalDistance(a1, a2, b1, b2)
-    print "Distance of", a1, "<->", a2, "  to  ",  b1, "<->",  b2, "is", axisDist
+#    print "Distance of", a1, "<->", a2, "  to  ",  b1, "<->",  b2, "is", axisDist
     #midBeta  = [b2 + 0.5 * dBeta for b2, dBeta in zip(beta2, dirBeta)]
     if axisDist < maxDist:
-        print b1, "<->",  b2, "is possible axis"
+   #     print b1, "<->",  b2, "is possible axis"
         return True
     else:
-        print b1, "<->",  b2, "is too far (", axisDist ,") from", a1, "<->", a2, ", maximal allowed distance =", maxDist
+   #     print b1, "<->",  b2, "is too far (", axisDist ,") from", a1, "<->", a2, ", maximal allowed distance =", maxDist
         return False
 
-def ellipsAlignMatrix(a1, a2):
-    ''' Creates the rotation matrix to rotate axis a1<->a2 on the x-Axis'''
+def getEllipsYZRotMatrix(a1, a2):
+    """ Creates the rotation matrix to rotate axis a1<->a2 on the x-Axis"""
     adir = a2 - a1
     amid = a1 + 0.5 * adir
     kath = np.sqrt((adir[0] * adir[0]  + adir[1] * adir[1]) / 4.0)
@@ -121,6 +121,23 @@ def ellipsAlignMatrix(a1, a2):
                       ])
     return np.asarray( RotY * RotZ )
 
+def getOblateXRotMatrix(aStar1, aStar2):
+    """ align the 'pseudo'-orthogonal axis of an oblate
+    to the xy-plane by rotation around the x-axis"""
+    aStarDir = aStar2 - a1
+    aStarmid = aStar1 + 0.5 * aStarDir
+    kath = np.sqrt((aStarDir[0] * aStarDir[0]  + aStarDir[1] * aStarDir[1]) / 4.0)
+    phi = np.arctan( abs( (aStarDir[2]/2) /  kath) )
+    octantAStar2 = octant(aStar2)
+    if octantAStar2 in [1, 2, 7, 8]: #
+        phi = -phi
+    print "phi =" , np.rad2deg(phi)
+    RotX = np.matrix( [ [ 1.0,      0.0    ,        0.0 ],
+                        [ 0.0,  np.cos(phi), np.sin(phi)],
+                        [ 0.0, -np.sin(phi), np.cos(phi)]
+                      ])
+    return np.asarray( RotX )
+
 #def pointToEllipsAlignment(point, translation, rotation):
 #    return rotation * (point - translation)
 
@@ -131,15 +148,25 @@ def isInProlate(sample, alpha, beta):
         the x of the coordinate system and in setting the center to the origin.
         The fundamental ellipsoidal equation is applied the transformed sample
         point """   
-#    sRot = np.matmul(rotation , (sample - translation))
-#    print sRot
     E    = sample[0] * sample[0] / (alpha * alpha)
     E   += (sample[1] * sample[1] + sample[2] * sample[2] ) / (beta * beta)
     if E > 1.0:
         return False
     else:
-        return True    
+        return True
     
+def isInOblate(sample, alpha, alphaStar, beta):
+#    alphaAv = (alpha + alphaStar) / 2
+    alphaAv = alpha
+    E = (sample[0] * sample[0]) + (sample[1] * sample[1]) / ( alphaAv * alphaAv )
+    E += (sample[2] * sample[2] ) / (beta * beta)
+#    print E
+    if E > 1.0:
+        return False
+    else:
+        return True
+
+        
 #############################
 ##                         ##
 ## start main script here  ##
@@ -182,6 +209,8 @@ elif sys.argv[2] == "--prolate":
 elif sys.argv[2] == "--all":
     shapeMode =  "All"
     print "Run with both shape models..."
+elif sys.argv[2] == "--secondAxisTest":
+    shapeMode = "secondAxisTest"
 else:
     "Please specify a valid shape model (--prolate, --oblate or --all)."
 
@@ -225,10 +254,10 @@ print "\n End List of atoms:\n"
 ###############################################
 atoms2        = atoms1
 defaultAtom   = Atom("N", [0.0, 0.0, 0.0], 1.0, 0.0, "d", "d", "d" )
-axesNum       = 5
+axesNum       = 3
 maxDistAtoms1 = [defaultAtom] * axesNum
 maxDistAtoms2 = [defaultAtom] * axesNum
-maxDists        = [0.0]         * axesNum
+maxDists        = [0.0]       * axesNum
 minDistOnList   = 0.0
 minIndex        = 0
 progressCounter = 0.0
@@ -268,8 +297,9 @@ for i in range(axesNum):
 ###  Prolate Mode
 ###
 #############################
-targetFile = open("testOutProlate.csv","w")
+
 if shapeMode == "Prolate" or shapeMode == "All":
+    targetFile = open("testOutProlate.csv","w")        
     print "-----------------------------------"
     print "- Start counting the atoms for     "
     print "- variable beta in prolate         "
@@ -297,8 +327,8 @@ if shapeMode == "Prolate" or shapeMode == "All":
         print "--> Shift amid to origin (and all atoms accordingly) -->"
         print "a1:", a1Shift, "\na2:", a2Shift, "\namid:", a1Shift + 0.5 * (a2Shift-a1Shift)
         # rotate all Shift atoms around origin = new alpha center
-        rotMat = ellipsAlignMatrix(a1Shift, a2Shift)        
-        atomsRot = [ np.matmul(a, rotMat) for a in atomsShift ]
+        rotMat = getEllipsYZRotMatrix(a1Shift, a2Shift)        
+        atomsRot = [ np.matmul(rotMat, a) for a in atomsShift ]
         a1Rot  = np.matmul(rotMat, a1Shift) 
         a2Rot  = np.matmul(rotMat, a2Shift)
         print "@-> Rotate alpha to x-axis @->"
@@ -307,10 +337,122 @@ if shapeMode == "Prolate" or shapeMode == "All":
         stride = 0.5
         for beta in np.arange(0.5, alpha, stride):
             atomsRot = filter(lambda sample: not isInProlate(sample, alpha, beta), atomsRot)
-#            print beta, len(atomsRot)
             if(i == 0 ):
                 targetFile.write(str(beta) + "," +  str(len(atomsRot)) + "\n")
-targetFile.close()                            
+    targetFile.close()                            
+
+
+#############################
+###
+###  Oblate Mode
+###
+#############################
+if shapeMode == "Oblate" or shapeMode == "All":  
+    targetFile = open("testOutOblate.csv","w")        
+    print "-----------------------------------"
+    print "- Find longest rectangular axes    "
+    print "- to first alpha axis              "
+    print "-----------------------------------\n"
+# Atom counting of prolates outside
+    rectAxes1 = [0] * axesNum
+    rectAxes2 = [0] * axesNum
+    for i in range(axesNum):
+        print "+++++++++++++++++++++++++++++++++++++++++"
+        print "+++ Check axis a1 <--> a2 \'", i, "\' +++"
+        print "+++++++++++++++++++++++++++++++++++++++++\n"
+        print "Find rectangular axes by bruteforce. This may take some time..."        
+        # take alpha axis      
+        a1 = np.asarray(maxDistAtoms1[i].get_coord())
+        a2 = np.asarray(maxDistAtoms2[i].get_coord())
+        # initialize
+        atoms2 = atoms1
+        rectAxes1[i]     = [defaultAtom] * axesNum
+        rectAxes2[i]     = [defaultAtom] * axesNum
+        minIndex         = 0
+        minDistOnList    = 0.0
+        progressCounter  = 0.0
+        maxDists         = [0] * axesNum
+        maxAxesDist      = 3.0
+        maxAxesTors      = 5.0
+        #############################################        
+        # go through half matrix of all atom pairs
+        # and find longest "almost" rectangular
+        # second alpha axes
+        #############################################
+        for aStar1 in atoms1 :
+            atoms2 = atoms2[1:]  #remove a1-equivalent from a2 => check only i > j
+            progressCounter += 1
+            if (progressCounter % 100 == 0):
+                print ("%.2f"% ( progressCounter / len(atoms1) * 100 ) ), "% done..."
+            for aStar2 in atoms2:
+                # find longest 
+                dist = aStar2 - aStar1
+                if dist > minDistOnList:
+                    if isSecondOblateAxis(a1, a2, aStar1.get_coord(), aStar2.get_coord(), maxAxesDist, maxAxesDist):
+                        rectAxes1[i][minIndex] = aStar1
+                        rectAxes2[i][minIndex] = aStar2
+                        maxDists[minIndex]    = dist
+                        minIndex              = maxDists.index(min(maxDists))
+                        minDistOnList = maxDists[minIndex]
+            
+            checkAtoms = [ np.asarray(a.get_coord()) for a in atoms1]
+            maxAtoms = len(checkAtoms)            
+        for j in range(axesNum):
+            print "---------------------------------------------"
+            print "--- Check axis a1 <--> a2 \'", i, "\'     ---"
+            print "---       and a*1 <--> a*2 \'", j, "\'    ---"
+            print "--- Start counting with oblate with       ---"
+            print "--- increasing beta axis                  ---"
+            print "---------------------------------------------\n"
+            aStar1 = np.asarray(rectAxes1[i][j].get_coord())
+            aStar2 = np.asarray(rectAxes2[i][j].get_coord())
+            # take all atoms from the protein
+            checkAtoms = [ np.asarray(a.get_coord()) for a in atoms1]
+            maxAtoms = len(checkAtoms)         
+            # shift all atoms from center of a1 <-> a2 axis to origin
+            adir = a2 - a1
+            alphaCenter = a1 + 0.5 * adir
+            print "a1:", a1, "\na2:", a2, "\namid:", alphaCenter
+            print "a*1:", aStar1,"\na*2:", aStar2, "\n"   
+            shift = -alphaCenter
+            atomsShift = [ a + shift for a in checkAtoms ]
+            a1Shift = a1 + shift
+            a2Shift = a2 + shift
+            aStar1Shift = aStar1 + shift
+            aStar2Shift = aStar2 + shift
+            print "--> Shift amid to origin (and all atoms accordingly) -->"            
+            print "a1:", a1Shift, "\na2:", a2Shift, "\namid:", a1Shift + 0.5 * (a2Shift-a1Shift)
+            print "a*1:", aStar1Shift,"\na*2:", aStar2Shift, "\n"   
+            # rotate all Shift atoms around origin = new alpha center
+            rotYZMat = getEllipsYZRotMatrix  (a1Shift, a2Shift)        
+            atomsRot = [ np.matmul(rotYZMat, a) for a in atomsShift ]
+            a1Rot  = np.matmul(rotYZMat, a1Shift) 
+            a2Rot  = np.matmul(rotYZMat, a2Shift)
+            aStar1Rot  = np.matmul(rotYZMat, aStar1Shift) 
+            aStar2Rot  = np.matmul(rotYZMat, aStar2Shift)
+            print "@-> Rotate round y- and z-axis to align alpha with x-axis @->"
+            print "a1:", a1Rot,"\na2:", a2Rot
+            print "a*1:", aStar1Rot,"\na*2:", aStar2Rot, "\n"   
+            # rotate all atoms around x to align alpha* with xy-plane
+            rotXMat = getOblateXRotMatrix(aStar1, aStar2)
+            atomsAligned = [ np.matmul(rotXMat, a) for a in atomsRot ]
+            a1Aligned  = np.matmul(rotXMat, a1Rot) 
+            a2Aligned  = np.matmul(rotXMat, a2Rot)
+            aStar1Aligned  = np.matmul(rotXMat, aStar1Rot) 
+            aStar2Aligned  = np.matmul(rotXMat, aStar2Rot)
+            print "<-@ Rotate around x-axis to align aStar with <-@"
+            print "a1:", a1Aligned,"\na2:", a2Aligned
+            print "a*1:", aStar1Aligned,"\na*2:", aStar2Aligned, "\n"   
+            alpha = abs( a1Aligned[0] )
+            print alpha
+            alphaStar = alpha # make length of aDirStar later
+#            print a1Aligned, alpha
+            stride = 0.5            
+            for beta in np.arange(0.5, alpha, stride):
+                atomsAligned = filter(lambda sample: not isInOblate(sample, alpha, alphaStar, beta), atomsAligned)
+                if (i == 0) and (j == 0):
+                    targetFile.write(str(beta) + "," +  str(len(atomsAligned)) + "\n")          
+    targetFile.close()
         
 #    maxDistAtoms1[0]
 #    maxDistAtoms2[0]
@@ -321,9 +463,39 @@ targetFile.close()
 #        if (progressCounter % 100 == 0) :
 #            print ("%.2f"% ( progressCounter / len(atoms1) * 100 ) ), "% done..."
 #    atoms2 = atoms2[1:] #remove a1-equivalent from a2 => check only i > j    
-    #     
-if shapeMode == "Oblate" or shapeMode == "All":    
-# test call for recognition of orthogonal beta axis
+#
+
+#######################
+# Test cases
+#######################
+if shapeMode == "secondAxisTest":
     print "-------------------------------------"
-    print "\nTest Axis recognition:", isSecondOblateAxis( [0.0, 0.0, 0.0], [10.0,10.0,10.0], [0.0, 0.0, 10.1], [10, 10, 0], 4.0, 10.0 ), "\n"
+    print "- Test rectangular axis recognition: "        
     print "-------------------------------------"
+    testA1 = [  0.0,  0.0,  0.0 ]
+    testA2 = [ 10.0, 10.0, 10.0 ]
+    testB1 = [  0.0,  0.0, 10.1 ]
+    testB2 = [ 10.0, 10.0,  0.0 ]
+    testMaxDist = 4.0  # angstrom
+    testMaxTors = 10.0 # degree
+    print "1. test case:", testA1, "<-->", testA2, "    ", testB1, "<-->", testB2
+    print  "maximal Distance:", testMaxDist ,"maximal Torsion:", testMaxDist
+    print "Distance and torsion small enough?"
+    print isSecondOblateAxis(testA1, testA2, testB1, testB2, testMaxDist, testMaxTors), "\n"
+    testA1 = [  0.0,  0.0,  0.0 ]
+    testA2 = [ 10.0, 10.0, 10.0 ]
+    testB1 = [  0.0,  0.0, 10.1 ]
+    testB2 = [ 10.0, 10.0,  0.0 ]
+    print "2. test case:", testA1, "<-->", testA2, "    ", testB1, "<-->", testB2
+    print  "maximal Distance:", testMaxDist ,"maximal Torsion:", testMaxDist
+    print "Distance and torsion small enough?"
+    print isSecondOblateAxis(testA1, testA2, testB1, testB2, testMaxDist, testMaxTors), "\n"
+    testA1 = [  0.0,  0.0,  0.0 ]
+    testA2 = [ 10.0, 10.0, 10.0 ]
+    testB1 = [  0.0,  0.0, 10.1 ]
+    testB2 = [ 10.0, 10.0,  0.0 ]
+    print "3. test case:", testA1, "<-->", testA2, "    ", testB1, "<-->", testB2
+    print  "maximal Distance:", testMaxDist ,"maximal Torsion:", testMaxDist
+    print "Distance and torsion small enough?"
+    print isSecondOblateAxis(testA1, testA2, testB1, testB2, testMaxDist, testMaxTors), "\n"
+    
